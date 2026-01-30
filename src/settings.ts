@@ -11,6 +11,8 @@ export interface GlobalSettings {
   image_cache_max_size_mb?: number;
   video_cache_max_size_mb?: number;
   refresh_stale_minutes?: number;
+  refresh_batch_size?: number;
+  refresh_cursor?: number;
 }
 
 export interface GrokSettings {
@@ -37,6 +39,8 @@ export interface SettingsBundle {
 }
 
 const DEFAULT_REFRESH_STALE_MINUTES = 10;
+const DEFAULT_REFRESH_BATCH_SIZE = 50;
+const DEFAULT_REFRESH_CURSOR = 0;
 
 const DEFAULTS: SettingsBundle = {
   global: {
@@ -48,6 +52,8 @@ const DEFAULTS: SettingsBundle = {
     image_cache_max_size_mb: 512,
     video_cache_max_size_mb: 1024,
     refresh_stale_minutes: DEFAULT_REFRESH_STALE_MINUTES,
+    refresh_batch_size: DEFAULT_REFRESH_BATCH_SIZE,
+    refresh_cursor: DEFAULT_REFRESH_CURSOR,
   },
   grok: {
     api_key: "",
