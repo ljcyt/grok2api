@@ -57,6 +57,14 @@ function formatBytes(sizeBytes: number): string {
   return `${(sizeBytes / mb).toFixed(1)} MB`;
 }
 
+const MS_PER_MINUTE = 60 * 1000;
+
+function calcRefreshStaleMs(minutes: number | null | undefined): number {
+  if (typeof minutes !== "number" || Number.isNaN(minutes)) return 0;
+  if (!Number.isFinite(minutes) || minutes <= 0) return 0;
+  return Math.floor(minutes * MS_PER_MINUTE);
+}
+
 async function clearKvCacheByType(
   env: Env,
   type: CacheType | null,
@@ -259,7 +267,9 @@ adminRoutes.post("/api/tokens/test", requireAdminAuth, async (c) => {
 
 adminRoutes.post("/api/tokens/refresh-all", requireAdminAuth, async (c) => {
   try {
-    const progress = await getRefreshProgress(c.env.DB);
+    const settings = await getSettings(c.env);
+    const staleMs = calcRefreshStaleMs(settings.global.refresh_stale_minutes);
+    const progress = await getRefreshProgress(c.env.DB, staleMs);
     if (progress.running) {
       return c.json({ success: false, message: "刷新任务正在进行中", data: progress });
     }
@@ -273,7 +283,6 @@ adminRoutes.post("/api/tokens/refresh-all", requireAdminAuth, async (c) => {
       failed: 0,
     });
 
-    const settings = await getSettings(c.env);
     const cf = normalizeCfCookie(settings.grok.cf_clearance ?? "");
 
     c.executionCtx.waitUntil(
@@ -306,7 +315,9 @@ adminRoutes.post("/api/tokens/refresh-all", requireAdminAuth, async (c) => {
 
 adminRoutes.get("/api/tokens/refresh-progress", requireAdminAuth, async (c) => {
   try {
-    const progress = await getRefreshProgress(c.env.DB);
+    const settings = await getSettings(c.env);
+    const staleMs = calcRefreshStaleMs(settings.global.refresh_stale_minutes);
+    const progress = await getRefreshProgress(c.env.DB, staleMs);
     return c.json({ success: true, data: progress });
   } catch (e) {
     return c.json(jsonError(`获取失败: ${e instanceof Error ? e.message : String(e)}`, "GET_PROGRESS_ERROR"), 500);

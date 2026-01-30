@@ -10,6 +10,7 @@ export interface GlobalSettings {
   admin_password?: string;
   image_cache_max_size_mb?: number;
   video_cache_max_size_mb?: number;
+  refresh_stale_minutes?: number;
 }
 
 export interface GrokSettings {
@@ -35,6 +36,8 @@ export interface SettingsBundle {
   grok: Required<GrokSettings>;
 }
 
+const DEFAULT_REFRESH_STALE_MINUTES = 10;
+
 const DEFAULTS: SettingsBundle = {
   global: {
     base_url: "",
@@ -44,6 +47,7 @@ const DEFAULTS: SettingsBundle = {
     admin_password: "admin",
     image_cache_max_size_mb: 512,
     video_cache_max_size_mb: 1024,
+    refresh_stale_minutes: DEFAULT_REFRESH_STALE_MINUTES,
   },
   grok: {
     api_key: "",
@@ -133,4 +137,3 @@ export async function saveSettings(
     ["grok", JSON.stringify(nextGrok), now],
   );
 }
-
