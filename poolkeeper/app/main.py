@@ -137,18 +137,28 @@ def run_once(cfg: Config) -> Dict[str, Any]:
         suspect_recheck_minutes=cfg.probe_suspect_recheck_minutes,
     )
     probe_results: List[Dict[str, Any]] = []
+    # Probe in chunks so a single HTTP call cannot stall the whole round.
+    chunk_size = max(1, min(20, cfg.probe_max_accounts_per_round))
     if candidates:
-        try:
-            probe_results = g2a.probe_build(
-                candidates,
-                model=cfg.probe_model,
-                timeout_seconds=cfg.probe_timeout_seconds,
-                concurrency=cfg.probe_concurrency,
-            )
-        except Exception as exc:
-            log.error("probe API failed (is build/probe deployed?): %s", exc)
-            # fallback: still compute waterline / replenish without probe
-            probe_results = []
+        for offset in range(0, len(candidates), chunk_size):
+            chunk = candidates[offset : offset + chunk_size]
+            try:
+                part = g2a.probe_build(
+                    chunk,
+                    model=cfg.probe_model,
+                    timeout_seconds=cfg.probe_timeout_seconds,
+                    concurrency=cfg.probe_concurrency,
+                )
+                probe_results.extend(part)
+                log.info(
+                    "probe chunk %s-%s/%s results=%s",
+                    offset + 1,
+                    offset + len(chunk),
+                    len(candidates),
+                    len(part),
+                )
+            except Exception as exc:
+                log.error("probe chunk failed: %s", exc)
 
     network_fails = 0
     soft_fails = 0

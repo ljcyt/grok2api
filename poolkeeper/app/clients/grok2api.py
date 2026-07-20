@@ -139,17 +139,28 @@ class Grok2APIClient:
     ) -> List[Dict[str, Any]]:
         if not account_ids:
             return []
-        payload = self._request(
-            "POST",
-            "/api/admin/v1/accounts/build/probe",
-            json_body={
-                "account_ids": account_ids,
-                "mode": "chat",
-                "model": model,
-                "timeout_seconds": timeout_seconds,
-                "concurrency": concurrency,
-            },
+        # HTTP client timeout must cover worst-case batch wall time.
+        conc = max(1, int(concurrency or 1))
+        batch_timeout = max(
+            self.timeout,
+            float(timeout_seconds) * ((len(account_ids) + conc - 1) // conc) + 30.0,
         )
+        old_timeout = self.timeout
+        self.timeout = batch_timeout
+        try:
+            payload = self._request(
+                "POST",
+                "/api/admin/v1/accounts/build/probe",
+                json_body={
+                    "account_ids": account_ids,
+                    "mode": "chat",
+                    "model": model,
+                    "timeout_seconds": timeout_seconds,
+                    "concurrency": concurrency,
+                },
+            )
+        finally:
+            self.timeout = old_timeout
         data = payload.get("data") if isinstance(payload, dict) and "data" in payload else payload
         if isinstance(data, dict):
             return list(data.get("results") or [])
