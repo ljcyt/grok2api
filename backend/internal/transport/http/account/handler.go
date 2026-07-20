@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -137,6 +138,7 @@ func (h *Handler) Register(router *gin.RouterGroup) {
 	router.POST("/accounts/device/start", h.startDevice)
 	router.POST("/accounts/device/:sessionId/poll", h.pollDevice)
 	router.POST("/accounts/import", h.importAuth)
+	router.POST("/accounts/build/probe", h.probeBuild)
 	router.POST("/accounts/web/import", h.importWebAuth)
 	router.POST("/accounts/console/import", h.importConsoleAuth)
 	router.POST("/accounts/web/convert-to-build", h.convertWebToBuild)
@@ -191,6 +193,14 @@ type batchDeleteRequest struct {
 type accountCleanupRequest struct {
 	Provider string                     `json:"provider" binding:"required"`
 	Statuses []accountapp.CleanupStatus `json:"statuses" binding:"required"`
+}
+
+type buildProbeRequest struct {
+	AccountIDs     []string `json:"account_ids" binding:"required"`
+	Mode           string   `json:"mode"`
+	Model          string   `json:"model"`
+	TimeoutSeconds int      `json:"timeout_seconds"`
+	Concurrency    int      `json:"concurrency"`
 }
 
 type buildConversionRequest struct {
@@ -483,6 +493,30 @@ func (h *Handler) cleanup(c *gin.Context) {
 		return
 	}
 	response.Success(c, http.StatusOK, gin.H{"deleted": deleted})
+}
+
+func (h *Handler) probeBuild(c *gin.Context) {
+	var request buildProbeRequest
+	if c.ShouldBindJSON(&request) != nil {
+		response.Error(c, http.StatusBadRequest, "invalidRequest", "请求参数无效")
+		return
+	}
+	if mode := strings.TrimSpace(request.Mode); mode != "" && mode != "chat" {
+		response.Error(c, http.StatusBadRequest, "invalidMode", "mode 仅支持 chat")
+		return
+	}
+	ids, err := parseIDs(request.AccountIDs)
+	if err != nil {
+		response.Error(c, http.StatusBadRequest, "invalidId", err.Error())
+		return
+	}
+	timeout := time.Duration(request.TimeoutSeconds) * time.Second
+	results, err := h.service.ProbeBuildAccounts(c.Request.Context(), ids, request.Model, timeout, request.Concurrency)
+	if err != nil {
+		h.writeServiceError(c, "accountProbeFailed", err, http.StatusInternalServerError, "账号测活失败")
+		return
+	}
+	response.Success(c, http.StatusOK, gin.H{"results": results})
 }
 
 func (h *Handler) batchRefreshQuotas(c *gin.Context) {

@@ -44,3 +44,10 @@ Thumbs.db
 /release/
 /.tmp/
 /tmp/
+
+# Poolkeeper local
+/poolkeeper/.env
+/poolkeeper/config.yaml
+/poolkeeper/data/
+/poolkeeper/.venv/
+

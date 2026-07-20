@@ -1,0 +1,18 @@
+# Sidecar next to existing grok2api + 8787 (host network for 127.0.0.1 access).
+services:
+  poolkeeper:
+    build: .
+    container_name: g2a-poolkeeper
+    network_mode: host
+    env_file:
+      - .env
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      POOLKEEPER_CONFIG: /app/config.yaml
+      G2A_BASE_URL: ${G2A_BASE_URL:-http://127.0.0.1:8000}
+      REGISTER_BASE_URL: ${REGISTER_BASE_URL:-http://127.0.0.1:8787}
+      REGISTER_PUBLIC_URL: ${REGISTER_PUBLIC_URL:-https://grok2.081488.xyz}
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ./data:/app/data
+    restart: unless-stopped

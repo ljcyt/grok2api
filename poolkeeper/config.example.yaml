@@ -1,0 +1,59 @@
+# Copy to config.yaml and fill secrets via env preferred.
+
+grok2api:
+  base_url: http://127.0.0.1:8000
+  admin_user: admin
+  # admin_password: set via G2A_ADMIN_PASSWORD
+  request_timeout_seconds: 30
+
+register8787:
+  # local service (preferred for poolkeeper on same host)
+  base_url: http://127.0.0.1:8787
+  # public cftun (docs / remote): https://grok2.081488.xyz
+  public_url: https://grok2.081488.xyz
+  # web_token: set via REGISTER_WEB_TOKEN
+
+scheduler:
+  enabled: true
+  interval_minutes: 30
+  lock_file: data/poolkeeper.lock
+
+state_db: data/poolkeeper.db
+
+probe:
+  provider: build
+  model: grok-4.5
+  concurrency: 5
+  timeout_seconds: 20
+  retries: 2
+  max_accounts_per_round: 100
+  suspect_recheck_minutes: 15
+  confirmed_dead_required: 2
+  dry_run: true
+
+cleanup:
+  mode: disable   # report_only | disable | delete
+  max_actions_per_round: 20
+  action_interval_seconds: 2
+  hard_delete_grace_hours: 48
+
+waterline:
+  low: 100
+  target: 150
+  emergency: 30
+  required_model: grok-4.5
+
+replenish:
+  enabled: true
+  inventory_first: true
+  max_import_per_round: 50
+  max_register_per_round: 100
+  cooldown_minutes: 60
+  failure_cooldown_minutes: 180
+  pause_when_existing_job_active: true
+  minimum_success_rate: 0.05
+
+safety:
+  max_delete_ratio_per_round: 0.02
+  stop_on_network_failure_ratio: 0.30
+  stop_on_soft_failure_ratio: 0.50
