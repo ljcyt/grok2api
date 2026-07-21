@@ -24,7 +24,6 @@ export type PoolkeeperConfigDTO = {
     concurrency?: number;
     timeout_seconds?: number;
     max_accounts_per_round?: number;
-    model?: string;
   };
   cleanup?: {
     mode?: string;
@@ -34,40 +33,25 @@ export type PoolkeeperConfigDTO = {
     low?: number;
     target?: number;
     emergency?: number;
-    required_model?: string;
   };
   replenish?: {
     enabled?: boolean;
     inventory_first?: boolean;
     max_register_per_round?: number;
     pause_when_existing_job_active?: boolean;
-    cooldown_minutes?: number;
   };
   scheduler?: {
     interval_minutes?: number;
   };
-  register8787?: {
-    base_url?: string;
-    public_url?: string;
-  };
-  grok2api?: {
-    base_url?: string;
-  };
 };
 
+/** Simplified form: only user-facing knobs. Advanced keys stay in yaml defaults. */
 export type PoolkeeperForm = {
   dryRun: boolean;
   replenishEnabled: boolean;
-  inventoryFirst: boolean;
-  pauseWhenActive: boolean;
   low: number;
   target: number;
-  emergency: number;
-  maxProbe: number;
-  concurrency: number;
-  timeoutSeconds: number;
-  cleanupMode: "report_only" | "disable" | "delete";
-  maxClean: number;
+  cleanupEnabled: boolean;
   maxRegister: number;
   intervalMinutes: number;
 };
@@ -89,7 +73,6 @@ const decodeStatus = createObjectDecoder<PoolkeeperStatusDTO>("poolkeeper status
   running: isBoolean,
 });
 
-// config is intentionally loose; only surface known fields to the form
 const decodeConfig = (value: unknown): PoolkeeperConfigDTO => {
   if (!value || typeof value !== "object") return {};
   return value as PoolkeeperConfigDTO;
@@ -122,46 +105,34 @@ export function configToForm(config: PoolkeeperConfigDTO, status?: PoolkeeperSta
   const rep = config.replenish || {};
   const clean = config.cleanup || {};
   const sch = config.scheduler || {};
-  const mode = (clean.mode || "disable") as PoolkeeperForm["cleanupMode"];
+  const mode = String(clean.mode || "disable");
   return {
     dryRun: probe.dry_run ?? status?.dry_run ?? true,
     replenishEnabled: rep.enabled ?? status?.replenish_enabled ?? false,
-    inventoryFirst: rep.inventory_first ?? true,
-    pauseWhenActive: rep.pause_when_existing_job_active ?? true,
     low: water.low ?? status?.waterline.low ?? 100,
     target: water.target ?? status?.waterline.target ?? 150,
-    emergency: water.emergency ?? status?.waterline.emergency ?? 30,
-    maxProbe: probe.max_accounts_per_round ?? 100,
-    concurrency: probe.concurrency ?? 5,
-    timeoutSeconds: probe.timeout_seconds ?? 20,
-    cleanupMode: ["report_only", "disable", "delete"].includes(mode) ? mode : "disable",
-    maxClean: clean.max_actions_per_round ?? 20,
+    cleanupEnabled: mode !== "report_only",
     maxRegister: rep.max_register_per_round ?? 100,
     intervalMinutes: sch.interval_minutes ?? 30,
   };
 }
 
+/** Only patch simplified fields; poolkeeper deep-merges so advanced yaml keys remain. */
 export function formToConfig(form: PoolkeeperForm): PoolkeeperConfigDTO {
   return {
     probe: {
       dry_run: form.dryRun,
-      concurrency: form.concurrency,
-      timeout_seconds: form.timeoutSeconds,
-      max_accounts_per_round: form.maxProbe,
     },
     cleanup: {
-      mode: form.cleanupMode,
-      max_actions_per_round: form.maxClean,
+      mode: form.cleanupEnabled ? "disable" : "report_only",
     },
     waterline: {
       low: form.low,
       target: form.target,
-      emergency: form.emergency,
+      emergency: Math.max(1, Math.floor(form.low / 3)),
     },
     replenish: {
       enabled: form.replenishEnabled,
-      inventory_first: form.inventoryFirst,
-      pause_when_existing_job_active: form.pauseWhenActive,
       max_register_per_round: form.maxRegister,
     },
     scheduler: {

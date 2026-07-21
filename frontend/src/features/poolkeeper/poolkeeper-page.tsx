@@ -7,7 +7,6 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -20,26 +19,23 @@ import {
   type PoolkeeperForm,
 } from "@/features/poolkeeper/poolkeeper-api";
 import { ErrorState } from "@/shared/components/data-state";
-import { cn } from "@/shared/lib/cn";
 
-function Field({
+function Row({
   label,
-  description,
+  help,
   children,
-  className,
 }: {
   label: string;
-  description?: string;
+  help?: string;
   children: React.ReactNode;
-  className?: string;
 }) {
   return (
-    <div className={cn("space-y-1.5 rounded-lg border border-border/70 bg-card/40 p-3", className)}>
-      <div>
-        <div className="text-xs font-medium text-foreground">{label}</div>
-        {description ? <div className="text-[11px] text-muted-foreground">{description}</div> : null}
+    <div className="grid gap-2 border-b border-border/60 py-3 last:border-0 sm:grid-cols-[minmax(0,1fr)_minmax(10rem,14rem)] sm:items-center">
+      <div className="min-w-0">
+        <div className="text-sm font-medium">{label}</div>
+        {help ? <div className="text-xs text-muted-foreground">{help}</div> : null}
       </div>
-      {children}
+      <div className="sm:justify-self-end">{children}</div>
     </div>
   );
 }
@@ -110,7 +106,7 @@ export function PoolkeeperPage() {
   }
 
   return (
-    <div className="w-full space-y-5">
+    <div className="mx-auto w-full max-w-2xl space-y-5">
       <header className="flex min-h-8 flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <h1 className="text-xl font-medium">{t("poolkeeper.title")}</h1>
@@ -140,12 +136,7 @@ export function PoolkeeperPage() {
             {runMutation.isPending ? <Spinner className="size-3.5" /> : <Play className="size-3.5" />}
             {t("poolkeeper.runOnce")}
           </Button>
-          <Button
-            type="button"
-            size="sm"
-            disabled={loading || saveMutation.isPending || !form}
-            onClick={() => saveMutation.mutate()}
-          >
+          <Button type="button" size="sm" disabled={loading || saveMutation.isPending || !form} onClick={() => saveMutation.mutate()}>
             {saveMutation.isPending ? <Spinner className="size-3.5" /> : <Save className="size-3.5" />}
             {t("common.save")}
           </Button>
@@ -153,101 +144,61 @@ export function PoolkeeperPage() {
       </header>
 
       {loading ? (
-        <div className="flex min-h-64 items-center justify-center">
+        <div className="flex min-h-48 items-center justify-center">
           <Spinner />
         </div>
       ) : (
         <>
-          <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="rounded-lg border border-border p-3">
-              <div className="text-[11px] text-muted-foreground">{t("poolkeeper.statusMode")}</div>
-              <div className="mt-1 text-sm font-medium">
-                {status?.running ? t("poolkeeper.running") : form.dryRun ? t("poolkeeper.dryRunMode") : t("poolkeeper.liveMode")}
-              </div>
+          <div className="rounded-lg border border-border px-4">
+            <div className="flex items-center justify-between gap-3 border-b border-border/60 py-3 text-xs text-muted-foreground">
+              <span>
+                {status?.running
+                  ? t("poolkeeper.running")
+                  : form.dryRun
+                    ? t("poolkeeper.dryRunMode")
+                    : t("poolkeeper.liveMode")}
+              </span>
+              <span className="truncate">{status?.g2a_base_url}</span>
             </div>
-            <div className="rounded-lg border border-border p-3">
-              <div className="text-[11px] text-muted-foreground">{t("poolkeeper.g2a")}</div>
-              <div className="mt-1 truncate text-sm font-medium">{status?.g2a_base_url || "—"}</div>
-            </div>
-            <div className="rounded-lg border border-border p-3">
-              <div className="text-[11px] text-muted-foreground">{t("poolkeeper.register")}</div>
-              <div className="mt-1 truncate text-sm font-medium">{status?.register_base_url || "—"}</div>
-            </div>
-            <div className="rounded-lg border border-border p-3">
-              <div className="text-[11px] text-muted-foreground">{t("poolkeeper.publicRegister")}</div>
-              <div className="mt-1 truncate text-sm font-medium">{status?.register_public_url || "—"}</div>
-            </div>
-          </section>
 
-          <section className="grid gap-3 md:grid-cols-2">
-            <Field label={t("poolkeeper.fields.dryRun")} description={t("poolkeeper.fields.dryRunHelp")}>
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-xs text-muted-foreground">{form.dryRun ? "true" : "false"}</span>
-                <Switch checked={form.dryRun} onCheckedChange={(value) => patch("dryRun", value)} />
-              </div>
-            </Field>
-            <Field label={t("poolkeeper.fields.replenishEnabled")} description={t("poolkeeper.fields.replenishEnabledHelp")}>
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-xs text-muted-foreground">{form.replenishEnabled ? "true" : "false"}</span>
-                <Switch checked={form.replenishEnabled} onCheckedChange={(value) => patch("replenishEnabled", value)} />
-              </div>
-            </Field>
-            <Field label={t("poolkeeper.fields.low")}>
-              <Input type="number" min={0} value={form.low} onChange={(e) => patch("low", Number(e.target.value))} />
-            </Field>
-            <Field label={t("poolkeeper.fields.target")}>
-              <Input type="number" min={0} value={form.target} onChange={(e) => patch("target", Number(e.target.value))} />
-            </Field>
-            <Field label={t("poolkeeper.fields.emergency")}>
-              <Input type="number" min={0} value={form.emergency} onChange={(e) => patch("emergency", Number(e.target.value))} />
-            </Field>
-            <Field label={t("poolkeeper.fields.interval")}>
-              <Input type="number" min={1} value={form.intervalMinutes} onChange={(e) => patch("intervalMinutes", Number(e.target.value))} />
-            </Field>
-            <Field label={t("poolkeeper.fields.maxProbe")}>
-              <Input type="number" min={1} value={form.maxProbe} onChange={(e) => patch("maxProbe", Number(e.target.value))} />
-            </Field>
-            <Field label={t("poolkeeper.fields.concurrency")}>
-              <Input type="number" min={1} max={16} value={form.concurrency} onChange={(e) => patch("concurrency", Number(e.target.value))} />
-            </Field>
-            <Field label={t("poolkeeper.fields.timeout")}>
-              <Input type="number" min={5} max={60} value={form.timeoutSeconds} onChange={(e) => patch("timeoutSeconds", Number(e.target.value))} />
-            </Field>
-            <Field label={t("poolkeeper.fields.cleanupMode")}>
-              <Select value={form.cleanupMode} onValueChange={(value) => patch("cleanupMode", value as PoolkeeperForm["cleanupMode"])}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="report_only">report_only</SelectItem>
-                  <SelectItem value="disable">disable</SelectItem>
-                  <SelectItem value="delete">delete</SelectItem>
-                </SelectContent>
-              </Select>
-            </Field>
-            <Field label={t("poolkeeper.fields.maxClean")}>
-              <Input type="number" min={0} value={form.maxClean} onChange={(e) => patch("maxClean", Number(e.target.value))} />
-            </Field>
-            <Field label={t("poolkeeper.fields.maxRegister")}>
-              <Input type="number" min={0} value={form.maxRegister} onChange={(e) => patch("maxRegister", Number(e.target.value))} />
-            </Field>
-            <Field label={t("poolkeeper.fields.inventoryFirst")}>
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-xs text-muted-foreground">{form.inventoryFirst ? "true" : "false"}</span>
-                <Switch checked={form.inventoryFirst} onCheckedChange={(value) => patch("inventoryFirst", value)} />
-              </div>
-            </Field>
-            <Field label={t("poolkeeper.fields.pauseWhenActive")}>
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-xs text-muted-foreground">{form.pauseWhenActive ? "true" : "false"}</span>
-                <Switch checked={form.pauseWhenActive} onCheckedChange={(value) => patch("pauseWhenActive", value)} />
-              </div>
-            </Field>
-          </section>
+            <Row label={t("poolkeeper.fields.dryRun")} help={t("poolkeeper.fields.dryRunHelp")}>
+              <Switch checked={form.dryRun} onCheckedChange={(value) => patch("dryRun", value)} />
+            </Row>
+            <Row label={t("poolkeeper.fields.replenishEnabled")} help={t("poolkeeper.fields.replenishEnabledHelp")}>
+              <Switch checked={form.replenishEnabled} onCheckedChange={(value) => patch("replenishEnabled", value)} />
+            </Row>
+            <Row label={t("poolkeeper.fields.cleanupEnabled")} help={t("poolkeeper.fields.cleanupEnabledHelp")}>
+              <Switch checked={form.cleanupEnabled} onCheckedChange={(value) => patch("cleanupEnabled", value)} />
+            </Row>
+            <Row label={t("poolkeeper.fields.low")} help={t("poolkeeper.fields.lowHelp")}>
+              <Input className="h-8 w-36" type="number" min={0} value={form.low} onChange={(e) => patch("low", Number(e.target.value))} />
+            </Row>
+            <Row label={t("poolkeeper.fields.target")} help={t("poolkeeper.fields.targetHelp")}>
+              <Input className="h-8 w-36" type="number" min={0} value={form.target} onChange={(e) => patch("target", Number(e.target.value))} />
+            </Row>
+            <Row label={t("poolkeeper.fields.maxRegister")} help={t("poolkeeper.fields.maxRegisterHelp")}>
+              <Input
+                className="h-8 w-36"
+                type="number"
+                min={0}
+                value={form.maxRegister}
+                onChange={(e) => patch("maxRegister", Number(e.target.value))}
+              />
+            </Row>
+            <Row label={t("poolkeeper.fields.interval")} help={t("poolkeeper.fields.intervalHelp")}>
+              <Input
+                className="h-8 w-36"
+                type="number"
+                min={1}
+                value={form.intervalMinutes}
+                onChange={(e) => patch("intervalMinutes", Number(e.target.value))}
+              />
+            </Row>
+          </div>
 
           <section className="space-y-2">
             <Label className="text-xs text-muted-foreground">{t("poolkeeper.lastRun")}</Label>
-            <pre className="max-h-72 overflow-auto rounded-lg border border-border bg-muted/20 p-3 text-xs leading-relaxed">
+            <pre className="max-h-56 overflow-auto rounded-lg border border-border bg-muted/20 p-3 text-xs leading-relaxed">
               {JSON.stringify(lastRun, null, 2)}
             </pre>
           </section>
