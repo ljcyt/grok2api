@@ -170,6 +170,9 @@ export function PoolkeeperPage() {
             <Row label={t("poolkeeper.fields.cleanupEnabled")} help={t("poolkeeper.fields.cleanupEnabledHelp")}>
               <Switch checked={form.cleanupEnabled} onCheckedChange={(value) => patch("cleanupEnabled", value)} />
             </Row>
+            <Row label={t("poolkeeper.fields.demotionEnabled")} help={t("poolkeeper.fields.demotionEnabledHelp")}>
+              <Switch checked={form.demotionEnabled} onCheckedChange={(value) => patch("demotionEnabled", value)} />
+            </Row>
             <Row label={t("poolkeeper.fields.low")} help={t("poolkeeper.fields.lowHelp")}>
               <Input className="h-8 w-36" type="number" min={0} value={form.low} onChange={(e) => patch("low", Number(e.target.value))} />
             </Row>

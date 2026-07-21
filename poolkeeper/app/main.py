@@ -16,6 +16,7 @@ from app.classifier import classify_bucket, count_healthy
 from app.clients.grok2api import Grok2APIClient
 from app.clients.register8787 import Register8787Client
 from app.config import Config
+from app.demotion import DemotionPolicy, apply_probe_evidence, maybe_enter_half_open
 from app.scheduler import file_lock, sleep_interval
 from app.state import StateStore
 from app.waterline import plan_replenish
@@ -162,6 +163,17 @@ def run_once(cfg: Config) -> Dict[str, Any]:
 
     network_fails = 0
     soft_fails = 0
+    stats["demotion_soft"] = 0
+    stats["demotion_hard"] = 0
+    stats["demotion_half_open"] = 0
+    stats["demotion_restored"] = 0
+    stats["priority_writes"] = 0
+
+    account_by_id = {_account_id(a): a for a in accounts if _account_id(a)}
+    demotion_policy = DemotionPolicy.from_config(cfg)
+    priority_writes = 0
+    max_prio_writes = int(getattr(cfg, "demotion_max_writes_per_round", 50) or 50)
+
     for row in probe_results:
         aid = str(row.get("account_id") or "")
         classification = str(row.get("classification") or "error")
@@ -191,6 +203,136 @@ def run_once(cfg: Config) -> Dict[str, Any]:
         elif bucket == "dead":
             if final == "confirmed_dead":
                 stats["confirmed_dead"] += 1
+
+        # --- soft/hard demotion from probe evidence ---
+        if demotion_policy.enabled and aid:
+            acc = account_by_id.get(aid) or {}
+            cur_prio = int(acc.get("priority") or 1)
+            bot = bool(acc.get("buildBotFlagged"))
+            prev_demo = store.get_probe_state(aid) or {}
+            new_demo, decision = apply_probe_evidence(
+                prev=prev_demo,
+                classification=final,
+                status_code=status_code,
+                current_priority=cur_prio,
+                bot_flagged=bot,
+                policy=demotion_policy,
+                now=time.time(),
+            )
+            store.save_demotion_state(
+                aid,
+                {
+                    "debt_score": new_demo.get("debt_score"),
+                    "hard_streak": new_demo.get("hard_streak"),
+                    "demotion_class": new_demo.get("demotion_class"),
+                    "half_open_successes": new_demo.get("half_open_successes"),
+                    "baseline_priority": new_demo.get("baseline_priority"),
+                    "demoted_at": new_demo.get("demoted_at"),
+                    "half_open_since": new_demo.get("half_open_since"),
+                    "cooldown_step": new_demo.get("cooldown_step"),
+                    "target_priority": new_demo.get("target_priority"),
+                    "bot_flagged": bot,
+                    "updated_at": time.time(),
+                },
+            )
+            if decision.write_priority and decision.target_priority is not None:
+                if decision.class_name == "soft":
+                    stats["demotion_soft"] += 1
+                elif decision.class_name == "hard":
+                    stats["demotion_hard"] += 1
+                elif decision.restore_baseline:
+                    stats["demotion_restored"] += 1
+                if priority_writes < max_prio_writes:
+                    if cfg.probe_dry_run:
+                        store.log_action(
+                            run_id,
+                            aid,
+                            f"priority->{decision.target_priority}",
+                            decision.reason or decision.class_name,
+                            dry_run=True,
+                            result="dry_run",
+                        )
+                    else:
+                        try:
+                            g2a.set_priority(aid, int(decision.target_priority))
+                            store.log_action(
+                                run_id,
+                                aid,
+                                f"priority->{decision.target_priority}",
+                                decision.reason or decision.class_name,
+                                dry_run=False,
+                                result="ok",
+                            )
+                            stats["priority_writes"] += 1
+                            priority_writes += 1
+                            time.sleep(cfg.cleanup_action_interval_seconds)
+                        except Exception as exc:
+                            store.log_action(
+                                run_id,
+                                aid,
+                                "priority",
+                                str(exc)[:120],
+                                dry_run=False,
+                                result="error",
+                            )
+                            log.error("set_priority %s failed: %s", aid, exc)
+
+    # half-open restore scan for previously demoted accounts
+    if demotion_policy.enabled and demotion_policy.half_open_enabled:
+        for item in store.list_demoted():
+            if priority_writes >= max_prio_writes:
+                break
+            aid = str(item.get("account_id") or "")
+            if not aid:
+                continue
+            acc = account_by_id.get(aid) or {}
+            bot = bool(acc.get("buildBotFlagged") or item.get("bot_flagged"))
+            new_state, decision = maybe_enter_half_open(
+                item,
+                policy=demotion_policy,
+                now=time.time(),
+                bot_flagged=bot,
+            )
+            if not decision.enter_half_open:
+                continue
+            store.save_demotion_state(
+                aid,
+                {
+                    "demotion_class": new_state.get("demotion_class"),
+                    "half_open_since": new_state.get("half_open_since"),
+                    "half_open_successes": 0,
+                    "target_priority": decision.target_priority,
+                    "updated_at": time.time(),
+                },
+            )
+            stats["demotion_half_open"] += 1
+            if decision.target_priority is None:
+                continue
+            if cfg.probe_dry_run:
+                store.log_action(
+                    run_id,
+                    aid,
+                    f"priority->{decision.target_priority}",
+                    "enter_half_open",
+                    dry_run=True,
+                    result="dry_run",
+                )
+            else:
+                try:
+                    g2a.set_priority(aid, int(decision.target_priority))
+                    store.log_action(
+                        run_id,
+                        aid,
+                        f"priority->{decision.target_priority}",
+                        "enter_half_open",
+                        dry_run=False,
+                        result="ok",
+                    )
+                    stats["priority_writes"] += 1
+                    priority_writes += 1
+                    time.sleep(cfg.cleanup_action_interval_seconds)
+                except Exception as exc:
+                    log.error("half_open priority %s failed: %s", aid, exc)
 
     probed_n = max(1, stats["probed"])
     if stats["probed"] and network_fails / probed_n >= cfg.stop_on_network_failure_ratio:

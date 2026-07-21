@@ -57,3 +57,20 @@ safety:
   max_delete_ratio_per_round: 0.02
   stop_on_network_failure_ratio: 0.30
   stop_on_soft_failure_ratio: 0.50
+
+# soft/hard demotion (ported from cpa-grok-panel); G2A prefers higher priority
+demotion:
+  enabled: true
+  soft_enabled: true
+  half_open_enabled: true
+  skip_bots: true
+  soft_priority: 0          # below default 1
+  hard_priority: -100
+  soft_debt_threshold: 2.0
+  hard_debt_threshold: 4.5
+  debt_fail_401: 1.5
+  debt_success_decay: 1.0
+  hard_streak_threshold: 3
+  half_open_success_threshold: 2
+  cooldown_hours: [6, 12, 24]
+  max_writes_per_round: 50

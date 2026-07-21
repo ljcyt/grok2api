@@ -173,6 +173,14 @@ class Grok2APIClient:
             json_body={"enabled": enabled},
         )
 
+    def set_priority(self, account_id: str, priority: int) -> Any:
+        """Patch priority only (G2A UpdateInput uses optional pointer fields)."""
+        return self._request(
+            "PATCH",
+            f"/api/admin/v1/accounts/{account_id}",
+            json_body={"priority": int(priority)},
+        )
+
     def batch_set_enabled(
         self, account_ids: List[str], enabled: bool, provider: str = "grok_build"
     ) -> Any:

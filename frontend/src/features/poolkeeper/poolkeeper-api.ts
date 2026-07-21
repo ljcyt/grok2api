@@ -43,6 +43,9 @@ export type PoolkeeperConfigDTO = {
   scheduler?: {
     interval_minutes?: number;
   };
+  demotion?: {
+    enabled?: boolean;
+  };
 };
 
 /** Simplified form: only user-facing knobs. Advanced keys stay in yaml defaults. */
@@ -54,6 +57,7 @@ export type PoolkeeperForm = {
   cleanupEnabled: boolean;
   maxRegister: number;
   intervalMinutes: number;
+  demotionEnabled: boolean;
 };
 
 const waterlineValidator = hasShape({
@@ -106,6 +110,7 @@ export function configToForm(config: PoolkeeperConfigDTO, status?: PoolkeeperSta
   const clean = config.cleanup || {};
   const sch = config.scheduler || {};
   const mode = String(clean.mode || "disable");
+  const demotion = config.demotion || {};
   return {
     dryRun: probe.dry_run ?? status?.dry_run ?? true,
     replenishEnabled: rep.enabled ?? status?.replenish_enabled ?? false,
@@ -114,6 +119,7 @@ export function configToForm(config: PoolkeeperConfigDTO, status?: PoolkeeperSta
     cleanupEnabled: mode !== "report_only",
     maxRegister: rep.max_register_per_round ?? 100,
     intervalMinutes: sch.interval_minutes ?? 30,
+    demotionEnabled: demotion.enabled ?? true,
   };
 }
 
@@ -137,6 +143,9 @@ export function formToConfig(form: PoolkeeperForm): PoolkeeperConfigDTO {
     },
     scheduler: {
       interval_minutes: form.intervalMinutes,
+    },
+    demotion: {
+      enabled: form.demotionEnabled,
     },
   };
 }

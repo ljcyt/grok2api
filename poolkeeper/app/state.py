@@ -33,7 +33,17 @@ class StateStore:
                     confirmed_dead_at REAL,
                     last_detail TEXT,
                     disabled_at REAL,
-                    updated_at REAL
+                    updated_at REAL,
+                    debt_score REAL DEFAULT 0,
+                    hard_streak INTEGER DEFAULT 0,
+                    demotion_class TEXT DEFAULT 'none',
+                    half_open_successes INTEGER DEFAULT 0,
+                    baseline_priority INTEGER,
+                    demoted_at REAL,
+                    half_open_since REAL,
+                    cooldown_step INTEGER DEFAULT 0,
+                    target_priority INTEGER,
+                    bot_flagged INTEGER DEFAULT 0
                 );
                 CREATE TABLE IF NOT EXISTS maintenance_runs (
                     run_id TEXT PRIMARY KEY,
@@ -72,6 +82,28 @@ class StateStore:
                 );
                 """
             )
+            self._migrate_demotion_columns(conn)
+
+    def _migrate_demotion_columns(self, conn: sqlite3.Connection) -> None:
+        cols = {
+            row[1]
+            for row in conn.execute("PRAGMA table_info(account_probe_state)").fetchall()
+        }
+        additions = {
+            "debt_score": "REAL DEFAULT 0",
+            "hard_streak": "INTEGER DEFAULT 0",
+            "demotion_class": "TEXT DEFAULT 'none'",
+            "half_open_successes": "INTEGER DEFAULT 0",
+            "baseline_priority": "INTEGER",
+            "demoted_at": "REAL",
+            "half_open_since": "REAL",
+            "cooldown_step": "INTEGER DEFAULT 0",
+            "target_priority": "INTEGER",
+            "bot_flagged": "INTEGER DEFAULT 0",
+        }
+        for name, decl in additions.items():
+            if name not in cols:
+                conn.execute(f"ALTER TABLE account_probe_state ADD COLUMN {name} {decl}")
 
     def get_probe_state(self, account_id: str) -> Optional[Dict[str, Any]]:
         with self._connect() as conn:
@@ -151,6 +183,57 @@ class StateStore:
         state = self.get_probe_state(account_id) or {}
         state["classification"] = final_class
         return state
+
+    def save_demotion_state(self, account_id: str, fields: Dict[str, Any]) -> None:
+        if not fields:
+            return
+        allowed = {
+            "debt_score",
+            "hard_streak",
+            "demotion_class",
+            "half_open_successes",
+            "baseline_priority",
+            "demoted_at",
+            "half_open_since",
+            "cooldown_step",
+            "target_priority",
+            "bot_flagged",
+            "updated_at",
+        }
+        cols = []
+        vals: list[Any] = []
+        for key, value in fields.items():
+            if key not in allowed:
+                continue
+            cols.append(f"{key} = ?")
+            if key == "bot_flagged":
+                vals.append(1 if value else 0)
+            else:
+                vals.append(value)
+        if not cols:
+            return
+        vals.append(account_id)
+        with self._connect() as conn:
+            # ensure row exists
+            conn.execute(
+                "INSERT OR IGNORE INTO account_probe_state(account_id) VALUES (?)",
+                (account_id,),
+            )
+            conn.execute(
+                f"UPDATE account_probe_state SET {', '.join(cols)} WHERE account_id = ?",
+                vals,
+            )
+
+    def list_demoted(self) -> List[Dict[str, Any]]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM account_probe_state
+                WHERE demotion_class IN ('soft', 'hard', 'half_open')
+                ORDER BY COALESCE(demoted_at, 0) ASC
+                """
+            ).fetchall()
+            return [dict(r) for r in rows]
 
     def mark_disabled(self, account_id: str) -> None:
         with self._connect() as conn:

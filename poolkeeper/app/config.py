@@ -80,6 +80,24 @@ class Config:
     stop_on_network_failure_ratio: float = 0.30
     stop_on_soft_failure_ratio: float = 0.50
 
+    # soft/hard demotion (cpa-grok-panel style); G2A uses higher priority first
+    demotion_enabled: bool = True
+    demotion_soft_enabled: bool = True
+    demotion_half_open_enabled: bool = True
+    demotion_skip_bots: bool = True
+    demotion_soft_priority: int = 0
+    demotion_hard_priority: int = -100
+    demotion_soft_debt_threshold: float = 2.0
+    demotion_hard_debt_threshold: float = 4.5
+    demotion_debt_fail_401: float = 1.5
+    demotion_debt_fail_429: float = 0.5
+    demotion_debt_success_decay: float = 1.0
+    demotion_count_429: bool = False
+    demotion_hard_streak_threshold: int = 3
+    demotion_half_open_success_threshold: int = 2
+    demotion_cooldown_hours: tuple = (6, 12, 24)
+    demotion_max_writes_per_round: int = 50
+
     request_timeout_seconds: float = 30.0
     once: bool = False
     metrics_port: int = 9108
@@ -104,6 +122,7 @@ class Config:
         water = data.get("waterline") or {}
         replenish = data.get("replenish") or {}
         safety = data.get("safety") or {}
+        demotion = data.get("demotion") or {}
 
         cfg.grok2api_base_url = _env("G2A_BASE_URL", str(g2a.get("base_url") or cfg.grok2api_base_url))
         cfg.grok2api_admin_user = _env("G2A_ADMIN_USER", str(g2a.get("admin_user") or cfg.grok2api_admin_user))
@@ -198,6 +217,54 @@ class Config:
         cfg.request_timeout_seconds = float(
             g2a.get("request_timeout_seconds") or cfg.request_timeout_seconds
         )
+        if demotion:
+            if "enabled" in demotion:
+                cfg.demotion_enabled = bool(demotion.get("enabled"))
+            if "soft_enabled" in demotion:
+                cfg.demotion_soft_enabled = bool(demotion.get("soft_enabled"))
+            if "half_open_enabled" in demotion:
+                cfg.demotion_half_open_enabled = bool(demotion.get("half_open_enabled"))
+            if "skip_bots" in demotion:
+                cfg.demotion_skip_bots = bool(demotion.get("skip_bots"))
+            cfg.demotion_soft_priority = int(
+                demotion.get("soft_priority", cfg.demotion_soft_priority)
+            )
+            cfg.demotion_hard_priority = int(
+                demotion.get("hard_priority", cfg.demotion_hard_priority)
+            )
+            cfg.demotion_soft_debt_threshold = float(
+                demotion.get("soft_debt_threshold", cfg.demotion_soft_debt_threshold)
+            )
+            cfg.demotion_hard_debt_threshold = float(
+                demotion.get("hard_debt_threshold", cfg.demotion_hard_debt_threshold)
+            )
+            cfg.demotion_debt_fail_401 = float(
+                demotion.get("debt_fail_401", cfg.demotion_debt_fail_401)
+            )
+            cfg.demotion_debt_fail_429 = float(
+                demotion.get("debt_fail_429", cfg.demotion_debt_fail_429)
+            )
+            cfg.demotion_debt_success_decay = float(
+                demotion.get("debt_success_decay", cfg.demotion_debt_success_decay)
+            )
+            if "count_429" in demotion:
+                cfg.demotion_count_429 = bool(demotion.get("count_429"))
+            cfg.demotion_hard_streak_threshold = int(
+                demotion.get("hard_streak_threshold", cfg.demotion_hard_streak_threshold)
+            )
+            cfg.demotion_half_open_success_threshold = int(
+                demotion.get(
+                    "half_open_success_threshold",
+                    cfg.demotion_half_open_success_threshold,
+                )
+            )
+            hours = demotion.get("cooldown_hours")
+            if isinstance(hours, (list, tuple)) and hours:
+                cfg.demotion_cooldown_hours = tuple(int(x) for x in hours)
+            cfg.demotion_max_writes_per_round = int(
+                demotion.get("max_writes_per_round", cfg.demotion_max_writes_per_round)
+            )
+        cfg.demotion_enabled = _env_bool("POOLKEEPER_DEMOTION", cfg.demotion_enabled)
         cfg.once = _env_bool("POOLKEEPER_ONCE", False)
         cfg.metrics_port = _env_int("POOLKEEPER_METRICS_PORT", cfg.metrics_port)
         cfg.extra = data

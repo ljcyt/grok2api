@@ -30,10 +30,11 @@ func NewHandler() *Handler {
 	return &Handler{
 		baseURL: strings.TrimRight(base, "/"),
 		token:   strings.TrimSpace(os.Getenv("POOLKEEPER_UI_TOKEN")),
+		// Poolkeeper is a local sidecar; never send admin proxy traffic through HTTP_PROXY.
 		httpClient: &http.Client{
 			Timeout: 60 * time.Second,
 			Transport: &http.Transport{
-				Proxy: http.ProxyFromEnvironment,
+				Proxy: nil,
 			},
 		},
 	}
